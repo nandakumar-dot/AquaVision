@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package media;
+
+service MediaProcessor {
+  rpc ProcessMedia (MediaRequest) returns (MediaResponse);
+  rpc ProcessMediaStream (stream MediaRequest) returns (stream MediaResponse);
+}
+
+message MediaRequest {
+  bytes file = 1;       // Raw file data (image/video)
+  string filename = 2;  // File name to identify type
+}
+
+message MediaResponse {
+  bytes processed_file = 1;  // Processed file data to return
+  string mimetype = 2;       // MIME type of the response (e.g., "image/jpeg")
+  string message = 3;        // Success or error message
+}

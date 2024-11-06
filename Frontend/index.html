@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AquaVision App</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+        }
+
+        h2 {
+            color: #34495e;
+            margin-top: 20px;
+        }
+
+        .upload-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 2px dashed #bdc3c7;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .preview {
+            margin-top: 20px;
+            max-width: 100%;
+        }
+
+        .preview img, .preview video {
+            max-width: 100%;
+            border-radius: 4px;
+        }
+
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #2980b9;
+        }
+
+        button:disabled {
+            background-color: #bdc3c7;
+            cursor: not-allowed;
+        }
+
+        .progress {
+            margin-top: 10px;
+            height: 20px;
+            background-color: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+            display: none;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background-color: #2ecc71;
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .result {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .success {
+            background-color: #d5f5e3;
+            color: #27ae60;
+        }
+
+        .error {
+            background-color: #f5d5d5;
+            color: #c0392b;
+        }
+
+        .stream-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #videoStream {
+            border-radius: 8px;
+            margin: 20px 0;
+            max-width: 100%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <h1>AquaVision</h1>
+
+    <div class="container">
+        <h2>Upload Image</h2>
+        <div class="upload-section">
+            <input type="file" id="imageInput" accept="image/*" style="display: none;">
+            <button id="selectImageBtn">Select Image</button>
+            <button id="uploadImageBtn" disabled>Process Image</button>
+            <div class="preview" id="imagePreview"></div>
+            <div class="progress" id="imageProgress">
+                <div class="progress-bar"></div>
+            </div>
+            <div class="result" id="imageResult"></div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Upload Video</h2>
+        <div class="upload-section">
+            <input type="file" id="videoInput" accept="video/*" style="display: none;">
+            <button id="selectVideoBtn">Select Video</button>
+            <button id="uploadVideoBtn" disabled>Process Video</button>
+            <div class="preview" id="videoPreview"></div>
+            <div class="progress" id="videoProgress">
+                <div class="progress-bar"></div>
+            </div>
+            <div class="result" id="videoResult"></div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Real-time Camera Processing</h2>
+        <div class="stream-container">
+            <video id="videoStream" width="640" height="480" autoplay></video>
+            <div>
+                <button id="startStreamBtn">Start Camera</button>
+                <button id="stopStreamBtn" style="display:none;">Stop Camera</button>
+                <button id="captureBtn" style="display:none;">Capture Frame</button>
+            </div>
+            <div class="result" id="streamResult"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        let mediaStream = null;
+        let processingStream = false;
+
+        // Utility functions
+        function showError(element, message) {
+            element.className = 'result error';
+            element.textContent = message;
+        }
+
+        function showSuccess(element, message) {
+            element.className = 'result success';
+            element.textContent = message;
+        }
+
+        function showProgress(progressElement) {
+            progressElement.style.display = 'block';
+            progressElement.querySelector('.progress-bar').style.width = '0%';
+        }
+
+        function updateProgress(progressElement, percent) {
+            progressElement.querySelector('.progress-bar').style.width = `${percent}%`;
+        }
+
+        // Image handling
+        document.getElementById('selectImageBtn').addEventListener('click', () => {
+            document.getElementById('imageInput').click();
+        });
+
+        document.getElementById('imageInput').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const preview = document.getElementById('imagePreview');
+                preview.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="Preview">`;
+                document.getElementById('uploadImageBtn').disabled = false;
+            }
+        });
+
+        document.getElementById('uploadImageBtn').addEventListener('click', async () => {
+            const file = document.getElementById('imageInput').files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const progressElement = document.getElementById('imageProgress');
+            const resultElement = document.getElementById('imageResult');
+            
+            try {
+                showProgress(progressElement);
+                
+                const response = await fetch(`${API_URL}/process-media`, {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (!response.ok) throw new Error('Processing failed');
+
+                const blob = await response.blob();
+                const preview = document.getElementById('imagePreview');
+                preview.innerHTML = `<img src="${URL.createObjectURL(blob)}" alt="Processed">`;
+                
+                showSuccess(resultElement, 'Image processed successfully!');
+            } catch (error) {
+                showError(resultElement, `Error: ${error.message}`);
+            } finally {
+                updateProgress(progressElement, 100);
+            }
+        });
+
+        // Video handling
+        document.getElementById('selectVideoBtn').addEventListener('click', () => {
+            document.getElementById('videoInput').click();
+        });
+
+        document.getElementById('videoInput').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const preview = document.getElementById('videoPreview');
+                preview.innerHTML = `<video controls><source src="${URL.createObjectURL(file)}"></video>`;
+                document.getElementById('uploadVideoBtn').disabled = false;
+            }
+        });
+
+        document.getElementById('uploadVideoBtn').addEventListener('click', async () => {
+            const file = document.getElementById('videoInput').files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const progressElement = document.getElementById('videoProgress');
+            const resultElement = document.getElementById('videoResult');
+            
+            try {
+                showProgress(progressElement);
+                
+                const response = await fetch(`${API_URL}/process-media`, {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (!response.ok) throw new Error('Processing failed');
+
+                const blob = await response.blob();
+                const preview = document.getElementById('videoPreview');
+                preview.innerHTML = `<video controls><source src="${URL.createObjectURL(blob)}"></video>`;
+                
+                showSuccess(resultElement, 'Video processed successfully!');
+            } catch (error) {
+                showError(resultElement, `Error: ${error.message}`);
+            } finally {
+                updateProgress(progressElement, 100);
+            }
+        });
+
+        // Camera streaming
+        const WEBSAPI_URL = 'ws://localhost:8000/ws/stream';
+
+        // Start streaming
+        document.getElementById('startStreamBtn').addEventListener('click', async () => {
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: { ideal: 1280 }, height: { ideal: 720 } }
+                });
+
+                const videoElement = document.getElementById('videoStream');
+                videoElement.srcObject = mediaStream;
+
+                document.getElementById('startStreamBtn').style.display = 'none';
+                document.getElementById('stopStreamBtn').style.display = 'inline';
+
+                startStreamingToServer();
+            } catch (error) {
+                console.error(`Camera error: ${error.message}`);
+            }
+        });
+
+        async function startStreamingToServer() {
+            const videoElement = document.getElementById('videoStream');
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+
+            const ws = new WebSocket(WEBSAPI_URL);
+
+            ws.onopen = () => {
+                console.log("WebSocket connection established.");
+                processingStream = true;
+            };
+
+            ws.onmessage = (event) => {
+                // Display processed frames received from server
+                const processedBlob = new Blob([event.data], { type: 'image/jpeg' });
+                const processedImage = new Image();
+                processedImage.src = WEBURL.createObjectURL(processedBlob);
+                processedImage.onload = () => context.drawImage(processedImage, 0, 0);
+            };
+
+            ws.onclose = () => {
+                processingStream = false;
+                console.log("WebSocket connection closed.");
+            };
+
+            // Capture frames and send them to the server
+            while (processingStream && mediaStream) {
+                canvas.width = videoElement.videoWidth;
+                canvas.height = videoElement.videoHeight;
+                context.drawImage(videoElement, 0, 0);
+                
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg'));
+                const arrayBuffer = await blob.arrayBuffer();
+                ws.send(arrayBuffer);  // Send frame as ArrayBuffer to server
+
+                // Add a delay to avoid overwhelming the server
+                await new Promise(resolve => setTimeout(resolve, 66)); // ~15 FPS
+            }
+        }
+
+        function stopStream() {
+            processingStream = false;
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => {
+                    track.stop();  // Stop each track
+                });
+                mediaStream = null;  // Set mediaStream to null
+            }
+            const videoElement = document.getElementById('videoStream');
+            videoElement.srcObject = null;  // Clear the video element source
+
+            // Update UI elements
+            document.getElementById('startStreamBtn').style.display = 'inline';
+            document.getElementById('stopStreamBtn').style.display = 'none';
+
+            console.log("Camera stopped successfully");
+        }
+
+
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            stopStream();
+        });
+    </script>
+</body>
+</html>
